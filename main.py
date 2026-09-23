@@ -58,19 +58,14 @@ class AlertasCog(commands.Cog):
             unix_timestamp = int(alert_utc.timestamp())
             
             embed = discord.Embed(
-                title="🎁 Daily Reward Alert!",
-                description="It's time to claim your daily reward in the game!",
+                title="Day Reset",
+                description="Don't forget to do the Jujutsu Trials, your 2x cc raids and daily tasks.",
                 color=discord.Color.gold(),
                 timestamp=now
             )
             embed.add_field(
-                name="⏰ Claim Now!",
-                value=f"Alert sent at <t:{unix_timestamp}:t> (Peru Time)\n\nEach user sees this in their local timezone!",
-                inline=False
-            )
-            embed.add_field(
-                name="📝 Reminder",
-                value="Don't forget to claim your daily reward before the day ends!",
+                name="⏰ Reset at",
+                value=f"<t:{unix_timestamp}:t>\n\nEach user sees this in their local timezone!",
                 inline=False
             )
             embed.set_footer(text="Daily Alert Bot")
@@ -125,19 +120,14 @@ class AlertasCog(commands.Cog):
         unix_timestamp = int(alert_utc.timestamp())
         
         embed = discord.Embed(
-            title="🎁 [TEST] Daily Reward Alert!",
-            description="This is a test alert.",
+            title="Day Reset",
+            description="Don't forget to do the Jujutsu Trials, your 2x cc raids and daily tasks.",
             color=discord.Color.blue(),
             timestamp=now
         )
         embed.add_field(
-            name="⏰ Claim Now!",
-            value=f"Alert would be sent at <t:{unix_timestamp}:t> (Peru Time)\n\nEach user sees this in their local timezone!",
-            inline=False
-        )
-        embed.add_field(
-            name="📝 Reminder",
-            value="Don't forget to claim your daily reward before the day ends!",
+            name="⏰ Reset at",
+            value=f"<t:{unix_timestamp}:t>\n\nEach user sees this in their local timezone!",
             inline=False
         )
         embed.set_footer(text="Daily Alert Bot - TEST MODE")
@@ -188,8 +178,8 @@ class AlertasCog(commands.Cog):
             inline=False
         )
         embed.add_field(
-            name="Alert Reference",
-            value="7:00 PM Peru Time (UTC-5)",
+            name="Alert Time",
+            value="7:00 PM (Reference: Peru Time)",
             inline=False
         )
         embed.set_footer(text=f"Current Peru time: {now.strftime('%m/%d/%Y %H:%M:%S')}")
