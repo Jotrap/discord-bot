@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands, tasks
-from datetime import datetime, time, timezone, timedelta
+from discord import app_commands
+from datetime import datetime, timedelta
 import pytz
 import asyncio
 import os
@@ -8,7 +9,7 @@ import os
 # Configuración del bot
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix='/', intents=intents)
 
 # Zona horaria de Perú
 peruvian_tz = pytz.timezone('America/Lima')
@@ -18,28 +19,25 @@ ALERT_HOUR = 19  # 7pm (19:00)
 ALERT_MINUTE = 0
 ALERT_SENT_TODAY = False
 
-# Zonas horarias para mostrar en el mensaje
-TIMEZONES = {
-    'America/New_York': 'Eastern Time (EST/EDT)',
-    'America/Chicago': 'Central Time (CST/CDT)',
-    'America/Denver': 'Mountain Time (MST/MDT)',
-    'America/Los_Angeles': 'Pacific Time (PST/PDT)',
-    'Europe/London': 'Greenwich Mean Time (GMT)',
-    'Europe/Paris': 'Central European Time (CET/CEST)',
-    'Europe/Berlin': 'Central European Time (CET/CEST)',
-    'Asia/Tokyo': 'Japan Standard Time (JST)',
-    'Asia/Shanghai': 'China Standard Time (CST)',
-    'Asia/Singapore': 'Singapore Standard Time (SGT)',
-    'Asia/Dubai': 'Gulf Standard Time (GST)',
-    'Australia/Sydney': 'Australian Eastern Time (AEST/AEDT)',
-    'America/Lima': 'Peru Time (PET)',
-}
-
 class AlertasCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.alert_channel = None
         self.daily_alert.start()
+    
+    def get_unix_timestamp_for_alert():
+        """Get Unix timestamp for the next alert at 7pm Peru time"""
+        now = datetime.now(peruvian_tz)
+        alert_time = now.replace(hour=ALERT_HOUR, minute=ALERT_MINUTE, second=0, microsecond=0)
+        
+        # If alert time has passed today, use tomorrow's
+        if now > alert_time:
+            alert_time += timedelta(days=1)
+        
+        # Convert to UTC for Unix timestamp
+        alert_utc = alert_time.astimezone(pytz.UTC)
+        unix_timestamp = int(alert_utc.timestamp())
+        return unix_timestamp
     
     @tasks.loop(minutes=1)
     async def daily_alert(self):
@@ -54,15 +52,10 @@ class AlertasCog(commands.Cog):
         
         # Check if it's the correct time
         if now.hour == ALERT_HOUR and now.minute == ALERT_MINUTE and not ALERT_SENT_TODAY:
-            # Create timezone information string
-            timezone_info = "**Time in different zones:**\n"
-            for tz_name, tz_display in TIMEZONES.items():
-                try:
-                    tz = pytz.timezone(tz_name)
-                    time_in_tz = now.astimezone(tz)
-                    timezone_info += f"🕐 {tz_display}: {time_in_tz.strftime('%H:%M')}\n"
-                except:
-                    pass
+            # Get Unix timestamp for 7pm Peru time today
+            alert_time = now.replace(hour=ALERT_HOUR, minute=ALERT_MINUTE, second=0, microsecond=0)
+            alert_utc = alert_time.astimezone(pytz.UTC)
+            unix_timestamp = int(alert_utc.timestamp())
             
             embed = discord.Embed(
                 title="🎁 Daily Reward Alert!",
@@ -71,17 +64,12 @@ class AlertasCog(commands.Cog):
                 timestamp=now
             )
             embed.add_field(
-                name="⏰ Current Time",
-                value=f"{now.strftime('%H:%M')} (Peru Time)",
+                name="⏰ Claim Now!",
+                value=f"Alert sent at <t:{unix_timestamp}:t> (Peru Time)\n\nEach user sees this in their local timezone!",
                 inline=False
             )
             embed.add_field(
-                name="🌍 Other Time Zones",
-                value=timezone_info,
-                inline=False
-            )
-            embed.add_field(
-                name="📝 Remember",
+                name="📝 Reminder",
                 value="Don't forget to claim your daily reward before the day ends!",
                 inline=False
             )
@@ -104,43 +92,37 @@ class AlertasCog(commands.Cog):
         """Wait for bot to be ready before starting the loop"""
         await self.bot.wait_until_ready()
     
-    @commands.command(name='set_alert_channel')
-    @commands.has_permissions(administrator=True)
-    async def set_alert_channel(self, ctx):
-        """
-        Configure the channel where alerts will be sent.
-        Usage: !set_alert_channel
-        """
-        self.alert_channel = ctx.channel
+    @app_commands.command(name="set_alert_channel", description="Configure the channel where alerts will be sent")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def set_alert_channel(self, interaction: discord.Interaction):
+        """Configure the channel where alerts will be sent"""
+        self.alert_channel = interaction.channel
         embed = discord.Embed(
             title="✅ Alert Channel Configured",
-            description=f"Alerts will be sent to {ctx.channel.mention}",
+            description=f"Alerts will be sent to {interaction.channel.mention}",
             color=discord.Color.green()
         )
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
     
-    @commands.command(name='test_alert')
-    @commands.has_permissions(administrator=True)
-    async def test_alert(self, ctx):
-        """
-        Send a test alert.
-        Usage: !test_alert
-        """
+    @app_commands.command(name="test_alert", description="Send a test alert")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def test_alert(self, interaction: discord.Interaction):
+        """Send a test alert"""
         if self.alert_channel is None:
-            await ctx.send("❌ First configure the channel with `!set_alert_channel`")
+            embed = discord.Embed(
+                title="❌ Error",
+                description="First configure the channel with `/set_alert_channel`",
+                color=discord.Color.red()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
         
         now = datetime.now(peruvian_tz)
         
-        # Create timezone information string
-        timezone_info = "**Time in different zones:**\n"
-        for tz_name, tz_display in TIMEZONES.items():
-            try:
-                tz = pytz.timezone(tz_name)
-                time_in_tz = now.astimezone(tz)
-                timezone_info += f"🕐 {tz_display}: {time_in_tz.strftime('%H:%M')}\n"
-            except:
-                pass
+        # Get Unix timestamp for 7pm Peru time
+        alert_time = now.replace(hour=ALERT_HOUR, minute=ALERT_MINUTE, second=0, microsecond=0)
+        alert_utc = alert_time.astimezone(pytz.UTC)
+        unix_timestamp = int(alert_utc.timestamp())
         
         embed = discord.Embed(
             title="🎁 [TEST] Daily Reward Alert!",
@@ -149,26 +131,29 @@ class AlertasCog(commands.Cog):
             timestamp=now
         )
         embed.add_field(
-            name="⏰ Current Time",
-            value=f"{now.strftime('%H:%M')} (Peru Time)",
+            name="⏰ Claim Now!",
+            value=f"Alert would be sent at <t:{unix_timestamp}:t> (Peru Time)\n\nEach user sees this in their local timezone!",
             inline=False
         )
         embed.add_field(
-            name="🌍 Other Time Zones",
-            value=timezone_info,
+            name="📝 Reminder",
+            value="Don't forget to claim your daily reward before the day ends!",
             inline=False
         )
         embed.set_footer(text="Daily Alert Bot - TEST MODE")
         
         await self.alert_channel.send("@everyone", embed=embed)
-        await ctx.send(f"✅ Test alert sent to {self.alert_channel.mention}")
+        
+        embed_response = discord.Embed(
+            title="✅ Test Alert Sent",
+            description=f"Test alert sent to {self.alert_channel.mention}",
+            color=discord.Color.green()
+        )
+        await interaction.response.send_message(embed=embed_response, ephemeral=True)
     
-    @commands.command(name='alert_status')
-    async def alert_status(self, ctx):
-        """
-        Show the current status of the alert system.
-        Usage: !alert_status
-        """
+    @app_commands.command(name="alert_status", description="Show the current status of the alert system")
+    async def alert_status(self, interaction: discord.Interaction):
+        """Show the current status of the alert system"""
         now = datetime.now(peruvian_tz)
         
         if self.alert_channel is None:
@@ -187,51 +172,57 @@ class AlertasCog(commands.Cog):
         hours = time_remaining.seconds // 3600
         minutes = (time_remaining.seconds % 3600) // 60
         
+        # Get Unix timestamp for next alert
+        alert_utc = alert_time.astimezone(pytz.UTC)
+        unix_timestamp = int(alert_utc.timestamp())
+        
         embed = discord.Embed(
             title="📊 Alert System Status",
             color=discord.Color.blurple()
         )
         embed.add_field(name="Status", value=status_text, inline=False)
         embed.add_field(name="Channel", value=channel_text, inline=False)
-        embed.add_field(name="Alert Time", value=f"{ALERT_HOUR:02d}:{ALERT_MINUTE:02d} (Peru Time)", inline=False)
         embed.add_field(
             name="Next Alert",
-            value=f"{alert_time.strftime('%m/%d/%Y %H:%M')} (in {hours}h {minutes}m)",
+            value=f"<t:{unix_timestamp}:f> (in {hours}h {minutes}m)\n\nEach user will see this in their local timezone!",
             inline=False
         )
         embed.add_field(
-            name="Time Zone",
-            value="America/Lima (UTC-5)",
+            name="Alert Reference",
+            value="7:00 PM Peru Time (UTC-5)",
             inline=False
         )
-        embed.set_footer(text=f"Current time: {now.strftime('%m/%d/%Y %H:%M:%S')}")
+        embed.set_footer(text=f"Current Peru time: {now.strftime('%m/%d/%Y %H:%M:%S')}")
         
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.event
 async def on_ready():
     print(f"✅ Bot connected as {bot.user}")
     print(f"📊 Latency: {bot.latency * 1000:.2f}ms")
     print(f"🔔 Alert configured for {ALERT_HOUR:02d}:{ALERT_MINUTE:02d} (Peru Time)")
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(f"Error syncing commands: {e}")
 
 @bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.MissingPermissions):
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
         embed = discord.Embed(
             title="❌ Insufficient Permissions",
             description="Only administrators can use this command.",
             color=discord.Color.red()
         )
-        await ctx.send(embed=embed)
-    elif isinstance(error, commands.CommandNotFound):
-        return
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     else:
         embed = discord.Embed(
             title="❌ Error",
             description=f"An error occurred: {str(error)}",
             color=discord.Color.red()
         )
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         print(f"Error: {error}")
 
 async def main():
