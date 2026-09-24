@@ -13,6 +13,10 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='/', intents=intents)
 
+# Guild ID para sincronización (Dodgers Faction)
+GUILD_ID = 1551004333628457082
+GUILD = discord.Object(id=GUILD_ID)
+
 # Zona horaria de Perú
 peruvian_tz = pytz.timezone('America/Lima')
 
@@ -161,7 +165,7 @@ class AlertasCog(commands.Cog):
         """Wait for bot to be ready before starting the loop"""
         await self.bot.wait_until_ready()
     
-    @app_commands.command(name="set_day_reset_channel", description="Configure the channel for Day Reset alerts")
+    @app_commands.command(name="set_day_reset_channel", description="Configure the channel for Day Reset alerts", guild=GUILD)
     @app_commands.checks.has_permissions(administrator=True)
     async def set_day_reset_channel(self, interaction: discord.Interaction):
         """Configure the channel for Day Reset alerts"""
@@ -177,7 +181,7 @@ class AlertasCog(commands.Cog):
             print(f"Error in set_day_reset_channel: {e}")
             traceback.print_exc()
     
-    @app_commands.command(name="set_raids_channel", description="Configure the channel for Infinity Raids alerts")
+    @app_commands.command(name="set_raids_channel", description="Configure the channel for Infinity Raids alerts", guild=GUILD)
     @app_commands.checks.has_permissions(administrator=True)
     async def set_raids_channel(self, interaction: discord.Interaction):
         """Configure the channel for Infinity Raids alerts"""
@@ -193,7 +197,7 @@ class AlertasCog(commands.Cog):
             print(f"Error in set_raids_channel: {e}")
             traceback.print_exc()
     
-    @app_commands.command(name="set_raid_role", description="Set the role for Infinity Raids alerts (alerts every hour)")
+    @app_commands.command(name="set_raid_role", description="Set the role for Infinity Raids alerts (alerts every hour)", guild=GUILD)
     @app_commands.checks.has_permissions(administrator=True)
     async def set_raid_role(self, interaction: discord.Interaction, role: discord.Role):
         """Set the role for Infinity Raids alerts"""
@@ -222,7 +226,7 @@ class AlertasCog(commands.Cog):
             print(f"Error in set_raid_role: {e}")
             traceback.print_exc()
     
-    @app_commands.command(name="remove_raid_role", description="Remove the Infinity Raids role alert")
+    @app_commands.command(name="remove_raid_role", description="Remove the Infinity Raids role alert", guild=GUILD)
     @app_commands.checks.has_permissions(administrator=True)
     async def remove_raid_role(self, interaction: discord.Interaction):
         """Remove the Infinity Raids role alert"""
@@ -251,7 +255,7 @@ class AlertasCog(commands.Cog):
             print(f"Error in remove_raid_role: {e}")
             traceback.print_exc()
     
-    @app_commands.command(name="raid_status", description="Check the current Infinity Raids configuration")
+    @app_commands.command(name="raid_status", description="Check the current Infinity Raids configuration", guild=GUILD)
     async def raid_status(self, interaction: discord.Interaction):
         """Check the current Infinity Raids configuration"""
         try:
@@ -307,7 +311,7 @@ class AlertasCog(commands.Cog):
             except Exception as e2:
                 print(f"Error sending error message: {e2}")
     
-    @app_commands.command(name="test_day_reset", description="Send a test Day Reset alert")
+    @app_commands.command(name="test_day_reset", description="Send a test Day Reset alert", guild=GUILD)
     @app_commands.checks.has_permissions(administrator=True)
     async def test_day_reset(self, interaction: discord.Interaction):
         """Send a test Day Reset alert"""
@@ -352,7 +356,7 @@ class AlertasCog(commands.Cog):
             print(f"Error in test_day_reset: {e}")
             traceback.print_exc()
     
-    @app_commands.command(name="test_raid_alert", description="Send a test Infinity Raids alert")
+    @app_commands.command(name="test_raid_alert", description="Send a test Infinity Raids alert", guild=GUILD)
     @app_commands.checks.has_permissions(administrator=True)
     async def test_raid_alert(self, interaction: discord.Interaction):
         """Send a test Infinity Raids alert"""
