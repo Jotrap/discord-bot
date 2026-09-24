@@ -101,64 +101,64 @@ class AlertasCog(commands.Cog):
     
     @tasks.loop(minutes=1)
     async def raids_alert(self):
-        """Checks every minute if it's time to send Infinity Raids alerts"""
+        """Checks every minute if it's time to send Infinity Raids alerts at each hour"""
         if self.raids_channel is None or not raids_config:
             return
         
         # Get current time in Peru timezone
         now = datetime.now(peruvian_tz)
-        current_hour = now.hour
         
-        # Check each configured raid time
-        for raid_time_str, raid_data in raids_config.items():
-            try:
-                raid_hour = int(raid_time_str)
-                role_id = raid_data.get('role_id')
-                last_sent = raid_data.get('last_sent', '')
-                
-                # Check if it's the correct hour and we haven't sent it yet
-                if now.minute == 0 and current_hour == raid_hour and last_sent != now.strftime('%Y-%m-%d %H'):
-                    # Get Unix timestamp for raid time
-                    raid_alarm_time = now.replace(minute=0, second=0, microsecond=0)
-                    raid_utc = raid_alarm_time.astimezone(pytz.UTC)
-                    unix_timestamp = int(raid_utc.timestamp())
+        # Check if it's at the top of any hour (minute 0)
+        if now.minute == 0:
+            # Check if raids are enabled for this hour
+            for hour_str, raid_data in raids_config.items():
+                try:
+                    raid_hour = int(hour_str)
+                    role_id = raid_data.get('role_id')
                     
-                    embed = discord.Embed(
-                        title="🔥 Infinity Raids are Open!",
-                        description="The Infinity Raids have opened! Get ready to raid!",
-                        color=discord.Color.red(),
-                        timestamp=now
-                    )
-                    embed.add_field(
-                        name="⏰ Open at",
-                        value=f"<t:{unix_timestamp}:t>\n\nEach user sees this in their local timezone!",
-                        inline=False
-                    )
-                    embed.add_field(
-                        name="💪 Reminder",
-                        value="Join and claim your rewards!",
-                        inline=False
-                    )
-                    embed.set_footer(text="Infinity Raids Alert Bot")
-                    
-                    try:
-                        role = self.bot.get_guild(self.raids_channel.guild.id).get_role(role_id)
-                        if role:
-                            mention = role.mention
-                        else:
-                            mention = "@here"
+                    # Check if it's the configured hour
+                    if now.hour == raid_hour:
+                        # Get Unix timestamps for start and end time
+                        start_time = now.replace(minute=0, second=0, microsecond=0)
+                        end_time = start_time + timedelta(minutes=15)
                         
-                        await self.raids_channel.send(f"{mention}", embed=embed)
+                        start_utc = start_time.astimezone(pytz.UTC)
+                        end_utc = end_time.astimezone(pytz.UTC)
                         
-                        # Update last sent time
-                        raids_config[raid_time_str]['last_sent'] = now.strftime('%Y-%m-%d %H')
-                        save_raids_config(raids_config)
+                        start_timestamp = int(start_utc.timestamp())
+                        end_timestamp = int(end_utc.timestamp())
                         
-                        print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Infinity Raids alert sent for {raid_hour}:00")
-                    except Exception as e:
-                        print(f"Error sending Infinity Raids alert: {e}")
-            except Exception as e:
-                print(f"Error processing raid time {raid_time_str}: {e}")
+                        embed = discord.Embed(
+                            title="🔥 Infinity Raids are Open!",
+                            description="The Infinity Raids have opened! Get ready to raid!",
+                            color=discord.Color.red(),
+                            timestamp=now
+                        )
+                        embed.add_field(
+                            name="⏰ Open Window",
+                            value=f"<t:{start_timestamp}:t> to <t:{end_timestamp}:t>\n\nEach user sees this in their local timezone!",
+                            inline=False
+                        )
+                        embed.add_field(
+                            name="💪 Reminder",
+                            value="Join and claim your rewards!",
+                            inline=False
+                        )
+                        embed.set_footer(text="Infinity Raids Alert Bot")
+                        
+                        try:
+                            role = self.bot.get_guild(self.raids_channel.guild.id).get_role(role_id)
+                            if role:
+                                mention = role.mention
+                            else:
+                                mention = "@here"
+                            
+                            await self.raids_channel.send(f"{mention}", embed=embed)
+                            print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Infinity Raids alert sent for {raid_hour:02d}:00")
+                        except Exception as e:
+                            print(f"Error sending Infinity Raids alert: {e}")
+                except Exception as e:
+                    print(f"Error processing raid time {hour_str}: {e}")
     
     @raids_alert.before_loop
     async def before_raids_alert(self):
@@ -204,14 +204,13 @@ class AlertasCog(commands.Cog):
         
         raids_config[str(hour)] = {
             'role_id': role.id,
-            'role_name': role.name,
-            'last_sent': ''
+            'role_name': role.name
         }
         save_raids_config(raids_config)
         
         embed = discord.Embed(
             title="✅ Raid Alert Added",
-            description=f"Infinity Raids alert added for **{hour:02d}:00**",
+            description=f"Infinity Raids alert added for **{hour:02d}:00 to {hour:02d}:15**",
             color=discord.Color.green()
         )
         embed.add_field(
@@ -221,7 +220,7 @@ class AlertasCog(commands.Cog):
         )
         embed.add_field(
             name="Notification",
-            value=f"Members of {role.mention} will be notified at {hour:02d}:00 (Peru Time)",
+            value=f"Members of {role.mention} will be notified at {hour:02d}:00",
             inline=False
         )
         await interaction.response.send_message(embed=embed)
@@ -264,17 +263,12 @@ class AlertasCog(commands.Cog):
             for hour_str in sorted(raids_config.keys(), key=lambda x: int(x)):
                 hour = int(hour_str)
                 role_name = raids_config[hour_str].get('role_name', 'Unknown')
-                raid_list += f"🕐 **{hour:02d}:00** → {role_name}\n"
+                raid_list += f"🔥 **{hour:02d}:00 - {hour:02d}:15** → {role_name}\n"
             
             embed = discord.Embed(
                 title="📊 Infinity Raids Alerts",
                 description=raid_list,
                 color=discord.Color.blurple()
-            )
-            embed.add_field(
-                name="Timezone",
-                value="All times are in Peru Time (UTC-5)",
-                inline=False
             )
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -336,10 +330,15 @@ class AlertasCog(commands.Cog):
         
         now = datetime.now(peruvian_tz)
         
-        # Get Unix timestamp
-        raid_time = now.replace(hour=hour, minute=0, second=0, microsecond=0)
-        raid_utc = raid_time.astimezone(pytz.UTC)
-        unix_timestamp = int(raid_utc.timestamp())
+        # Get Unix timestamps for start and end time
+        start_time = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        end_time = start_time + timedelta(minutes=15)
+        
+        start_utc = start_time.astimezone(pytz.UTC)
+        end_utc = end_time.astimezone(pytz.UTC)
+        
+        start_timestamp = int(start_utc.timestamp())
+        end_timestamp = int(end_utc.timestamp())
         
         embed = discord.Embed(
             title="🔥 Infinity Raids are Open!",
@@ -348,8 +347,8 @@ class AlertasCog(commands.Cog):
             timestamp=now
         )
         embed.add_field(
-            name="⏰ Open at",
-            value=f"<t:{unix_timestamp}:t>\n\nEach user sees this in their local timezone!",
+            name="⏰ Open Window",
+            value=f"<t:{start_timestamp}:t> to <t:{end_timestamp}:t>\n\nEach user sees this in their local timezone!",
             inline=False
         )
         embed.add_field(
@@ -372,9 +371,9 @@ class AlertasCog(commands.Cog):
 async def on_ready():
     print(f"✅ Bot connected as {bot.user}")
     print(f"📊 Latency: {bot.latency * 1000:.2f}ms")
-    print(f"🔔 Day Reset configured for {DAY_RESET_HOUR:02d}:{DAY_RESET_MINUTE:02d} (Peru Time)")
+    print(f"🔔 Day Reset configured for {DAY_RESET_HOUR:02d}:{DAY_RESET_MINUTE:02d}")
     if raids_config:
-        print(f"🔥 Infinity Raids alerts configured: {', '.join([f'{h}:00' for h in sorted(raids_config.keys(), key=lambda x: int(x))])}")
+        print(f"🔥 Infinity Raids alerts configured: {', '.join([f'{h}:00-{h}:15' for h in sorted(raids_config.keys(), key=lambda x: int(x))])}")
     try:
         synced = await bot.tree.sync()
         print(f"✅ Synced {len(synced)} command(s)")
