@@ -393,21 +393,26 @@ async def on_ready():
 
 @bot.event
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
-    if isinstance(error, app_commands.MissingPermissions):
-        embed = discord.Embed(
-            title="❌ Insufficient Permissions",
-            description="Only administrators can use this command.",
-            color=discord.Color.red()
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-    else:
-        embed = discord.Embed(
-            title="❌ Error",
-            description=f"An error occurred: {str(error)}",
-            color=discord.Color.red()
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        print(f"Error: {error}")
+    try:
+        if isinstance(error, app_commands.MissingPermissions):
+            embed = discord.Embed(
+                title="❌ Insufficient Permissions",
+                description="Only administrators can use this command.",
+                color=discord.Color.red()
+            )
+            if not interaction.response.is_done():
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+        else:
+            embed = discord.Embed(
+                title="❌ Error",
+                description=f"An error occurred: {str(error)}",
+                color=discord.Color.red()
+            )
+            if not interaction.response.is_done():
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            print(f"Error: {error}")
+    except Exception as e:
+        print(f"Error handler error: {e}")
 
 async def main():
     """Main function to run the bot"""
