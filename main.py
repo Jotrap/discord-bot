@@ -255,6 +255,11 @@ class AlertasCog(commands.Cog):
     async def raid_status(self, interaction: discord.Interaction):
         """Check the current Infinity Raids configuration"""
         try:
+            print(f"raid_status command called in server: {interaction.guild.name if interaction.guild else 'DM'}")
+            
+            await interaction.response.defer()
+            print("Response deferred successfully")
+            
             if not raids_config.get('role_id'):
                 embed = discord.Embed(
                     title="📊 Infinity Raids Status",
@@ -289,10 +294,18 @@ class AlertasCog(commands.Cog):
                     inline=False
                 )
             
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            print("Embed sent successfully")
         except Exception as e:
             print(f"Error in raid_status: {e}")
             traceback.print_exc()
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+                else:
+                    await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+            except Exception as e2:
+                print(f"Error sending error message: {e2}")
     
     @app_commands.command(name="test_day_reset", description="Send a test Day Reset alert")
     @app_commands.checks.has_permissions(administrator=True)
