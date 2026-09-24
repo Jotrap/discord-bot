@@ -31,7 +31,7 @@ def load_raids_config():
                 return json.load(f)
     except:
         pass
-    return {}
+    return {'role_id': None, 'role_name': None}
 
 def save_raids_config(data):
     """Save Infinity Raids configuration to file"""
@@ -102,7 +102,7 @@ class AlertasCog(commands.Cog):
     @tasks.loop(minutes=1)
     async def raids_alert(self):
         """Checks every minute if it's time to send Infinity Raids alerts at each hour"""
-        if self.raids_channel is None or not raids_config:
+        if self.raids_channel is None or not raids_config.get('role_id'):
             return
         
         # Get current time in Peru timezone
@@ -110,55 +110,48 @@ class AlertasCog(commands.Cog):
         
         # Check if it's at the top of any hour (minute 0)
         if now.minute == 0:
-            # Check if raids are enabled for this hour
-            for hour_str, raid_data in raids_config.items():
-                try:
-                    raid_hour = int(hour_str)
-                    role_id = raid_data.get('role_id')
-                    
-                    # Check if it's the configured hour
-                    if now.hour == raid_hour:
-                        # Get Unix timestamps for start and end time
-                        start_time = now.replace(minute=0, second=0, microsecond=0)
-                        end_time = start_time + timedelta(minutes=15)
-                        
-                        start_utc = start_time.astimezone(pytz.UTC)
-                        end_utc = end_time.astimezone(pytz.UTC)
-                        
-                        start_timestamp = int(start_utc.timestamp())
-                        end_timestamp = int(end_utc.timestamp())
-                        
-                        embed = discord.Embed(
-                            title="🔥 Infinity Raids are Open!",
-                            description="The Infinity Raids have opened! Get ready to raid!",
-                            color=discord.Color.red(),
-                            timestamp=now
-                        )
-                        embed.add_field(
-                            name="⏰ Open Window",
-                            value=f"<t:{start_timestamp}:t> to <t:{end_timestamp}:t>\n\nEach user sees this in their local timezone!",
-                            inline=False
-                        )
-                        embed.add_field(
-                            name="💪 Reminder",
-                            value="Join and claim your rewards!",
-                            inline=False
-                        )
-                        embed.set_footer(text="Infinity Raids Alert Bot")
-                        
-                        try:
-                            role = self.bot.get_guild(self.raids_channel.guild.id).get_role(role_id)
-                            if role:
-                                mention = role.mention
-                            else:
-                                mention = "@here"
-                            
-                            await self.raids_channel.send(f"{mention}", embed=embed)
-                            print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Infinity Raids alert sent for {raid_hour:02d}:00")
-                        except Exception as e:
-                            print(f"Error sending Infinity Raids alert: {e}")
-                except Exception as e:
-                    print(f"Error processing raid time {hour_str}: {e}")
+            # Alert for every hour if role is configured
+            role_id = raids_config.get('role_id')
+            
+            # Get Unix timestamps for start and end time (15 minutes)
+            start_time = now.replace(minute=0, second=0, microsecond=0)
+            end_time = start_time + timedelta(minutes=15)
+            
+            start_utc = start_time.astimezone(pytz.UTC)
+            end_utc = end_time.astimezone(pytz.UTC)
+            
+            start_timestamp = int(start_utc.timestamp())
+            end_timestamp = int(end_utc.timestamp())
+            
+            embed = discord.Embed(
+                title="🔥 Infinity Raids are Open!",
+                description="The Infinity Raids have opened! Get ready to raid!",
+                color=discord.Color.red(),
+                timestamp=now
+            )
+            embed.add_field(
+                name="⏰ Open Window",
+                value=f"<t:{start_timestamp}:t> to <t:{end_timestamp}:t>\n\nEach user sees this in their local timezone!",
+                inline=False
+            )
+            embed.add_field(
+                name="💪 Reminder",
+                value="Join and claim your rewards!",
+                inline=False
+            )
+            embed.set_footer(text="Infinity Raids Alert Bot")
+            
+            try:
+                role = self.bot.get_guild(self.raids_channel.guild.id).get_role(role_id)
+                if role:
+                    mention = role.mention
+                else:
+                    mention = "@here"
+                
+                await self.raids_channel.send(f"{mention}", embed=embed)
+                print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Infinity Raids alert sent for {now.hour:02d}:00")
+            except Exception as e:
+                print(f"Error sending Infinity Raids alert: {e}")
     
     @raids_alert.before_loop
     async def before_raids_alert(self):
@@ -189,86 +182,91 @@ class AlertasCog(commands.Cog):
         )
         await interaction.response.send_message(embed=embed)
     
-    @app_commands.command(name="add_raid_alert", description="Add an Infinity Raids alert for a specific hour")
+    @app_commands.command(name="set_raid_role", description="Set the role for Infinity Raids alerts (alerts every hour)")
     @app_commands.checks.has_permissions(administrator=True)
-    async def add_raid_alert(self, interaction: discord.Interaction, hour: int, role: discord.Role):
-        """Add an Infinity Raids alert for a specific hour"""
-        if hour < 0 or hour > 23:
+    async def set_raid_role(self, interaction: discord.Interaction, role: discord.Role):
+        """Set the role for Infinity Raids alerts"""
+        raids_config['role_id'] = role.id
+        raids_config['role_name'] = role.name
+        save_raids_config(raids_config)
+        
+        embed = discord.Embed(
+            title="✅ Raid Role Configured",
+            description=f"Infinity Raids alerts will be sent to {role.mention}",
+            color=discord.Color.green()
+        )
+        embed.add_field(
+            name="⏰ Alert Frequency",
+            value="Alerts will be sent **every hour at XX:00** (all 24 hours)",
+            inline=False
+        )
+        embed.add_field(
+            name="⏱️ Duration",
+            value="Each alert covers XX:00 to XX:15",
+            inline=False
+        )
+        await interaction.response.send_message(embed=embed)
+    
+    @app_commands.command(name="remove_raid_role", description="Remove the Infinity Raids role alert")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def remove_raid_role(self, interaction: discord.Interaction):
+        """Remove the Infinity Raids role alert"""
+        if not raids_config.get('role_id'):
             embed = discord.Embed(
                 title="❌ Error",
-                description="Hour must be between 0 and 23",
+                description="No raid role configured",
                 color=discord.Color.red()
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
         
-        raids_config[str(hour)] = {
-            'role_id': role.id,
-            'role_name': role.name
-        }
+        role_name = raids_config.get('role_name', 'Unknown')
+        raids_config['role_id'] = None
+        raids_config['role_name'] = None
         save_raids_config(raids_config)
         
         embed = discord.Embed(
-            title="✅ Raid Alert Added",
-            description=f"Infinity Raids alert added for **{hour:02d}:00 to {hour:02d}:15**",
+            title="✅ Raid Role Removed",
+            description=f"Infinity Raids alerts removed for **{role_name}**",
             color=discord.Color.green()
-        )
-        embed.add_field(
-            name="Role",
-            value=role.mention,
-            inline=False
-        )
-        embed.add_field(
-            name="Notification",
-            value=f"Members of {role.mention} will be notified at {hour:02d}:00",
-            inline=False
         )
         await interaction.response.send_message(embed=embed)
     
-    @app_commands.command(name="remove_raid_alert", description="Remove an Infinity Raids alert for a specific hour")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def remove_raid_alert(self, interaction: discord.Interaction, hour: int):
-        """Remove an Infinity Raids alert for a specific hour"""
-        if str(hour) not in raids_config:
+    @app_commands.command(name="raid_status", description="Check the current Infinity Raids configuration")
+    async def raid_status(self, interaction: discord.Interaction):
+        """Check the current Infinity Raids configuration"""
+        if not raids_config.get('role_id'):
             embed = discord.Embed(
-                title="❌ Error",
-                description=f"No raid alert configured for {hour:02d}:00",
-                color=discord.Color.red()
+                title="📊 Infinity Raids Status",
+                description="❌ No raid role configured",
+                color=discord.Color.orange()
             )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-        
-        role_name = raids_config[str(hour)].get('role_name', 'Unknown')
-        del raids_config[str(hour)]
-        save_raids_config(raids_config)
-        
-        embed = discord.Embed(
-            title="✅ Raid Alert Removed",
-            description=f"Infinity Raids alert removed for **{hour:02d}:00** ({role_name})",
-            color=discord.Color.green()
-        )
-        await interaction.response.send_message(embed=embed)
-    
-    @app_commands.command(name="list_raid_alerts", description="List all configured Infinity Raids alerts")
-    async def list_raid_alerts(self, interaction: discord.Interaction):
-        """List all configured Infinity Raids alerts"""
-        if not raids_config:
-            embed = discord.Embed(
-                title="📊 Infinity Raids Alerts",
-                description="No raid alerts configured yet. Use `/add_raid_alert` to add one.",
-                color=discord.Color.blurple()
+            embed.add_field(
+                name="ℹ️ Setup",
+                value="Use `/set_raid_role` to configure alerts for all hourly raids",
+                inline=False
             )
         else:
-            raid_list = "**Configured Raid Times:**\n\n"
-            for hour_str in sorted(raids_config.keys(), key=lambda x: int(x)):
-                hour = int(hour_str)
-                role_name = raids_config[hour_str].get('role_name', 'Unknown')
-                raid_list += f"🔥 **{hour:02d}:00 - {hour:02d}:15** → {role_name}\n"
-            
+            role_name = raids_config.get('role_name', 'Unknown')
             embed = discord.Embed(
-                title="📊 Infinity Raids Alerts",
-                description=raid_list,
-                color=discord.Color.blurple()
+                title="📊 Infinity Raids Status",
+                description=f"✅ Raids configured for role: **{role_name}**",
+                color=discord.Color.green()
+            )
+            embed.add_field(
+                name="⏰ Alert Times",
+                value="**Every hour at XX:00** (00:00, 01:00, 02:00... 23:00)",
+                inline=False
+            )
+            embed.add_field(
+                name="⏱️ Duration",
+                value="Each alert covers XX:00 to XX:15",
+                inline=False
+            )
+            embed.add_field(
+                name="📢 Mentions",
+                value=f"Will mention {role_name}",
+                inline=False
             )
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -317,7 +315,7 @@ class AlertasCog(commands.Cog):
     
     @app_commands.command(name="test_raid_alert", description="Send a test Infinity Raids alert")
     @app_commands.checks.has_permissions(administrator=True)
-    async def test_raid_alert(self, interaction: discord.Interaction, hour: int, role: discord.Role):
+    async def test_raid_alert(self, interaction: discord.Interaction):
         """Send a test Infinity Raids alert"""
         if self.raids_channel is None:
             embed = discord.Embed(
@@ -328,10 +326,19 @@ class AlertasCog(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
         
+        if not raids_config.get('role_id'):
+            embed = discord.Embed(
+                title="❌ Error",
+                description="First set a raid role with `/set_raid_role`",
+                color=discord.Color.red()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
         now = datetime.now(peruvian_tz)
         
         # Get Unix timestamps for start and end time
-        start_time = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        start_time = now.replace(minute=0, second=0, microsecond=0)
         end_time = start_time + timedelta(minutes=15)
         
         start_utc = start_time.astimezone(pytz.UTC)
@@ -358,11 +365,14 @@ class AlertasCog(commands.Cog):
         )
         embed.set_footer(text="Infinity Raids Alert Bot - TEST MODE")
         
-        await self.raids_channel.send(f"{role.mention}", embed=embed)
+        role = self.bot.get_guild(self.raids_channel.guild.id).get_role(raids_config.get('role_id'))
+        mention = role.mention if role else "@here"
+        
+        await self.raids_channel.send(f"{mention}", embed=embed)
         
         embed_response = discord.Embed(
             title="✅ Test Alert Sent",
-            description=f"Test Infinity Raids alert sent to {self.raids_channel.mention} for {role.mention}",
+            description=f"Test Infinity Raids alert sent to {self.raids_channel.mention}",
             color=discord.Color.green()
         )
         await interaction.response.send_message(embed=embed_response, ephemeral=True)
@@ -372,8 +382,9 @@ async def on_ready():
     print(f"✅ Bot connected as {bot.user}")
     print(f"📊 Latency: {bot.latency * 1000:.2f}ms")
     print(f"🔔 Day Reset configured for {DAY_RESET_HOUR:02d}:{DAY_RESET_MINUTE:02d}")
-    if raids_config:
-        print(f"🔥 Infinity Raids alerts configured: {', '.join([f'{h}:00-{h}:15' for h in sorted(raids_config.keys(), key=lambda x: int(x))])}")
+    if raids_config.get('role_id'):
+        role_name = raids_config.get('role_name', 'Unknown')
+        print(f"🔥 Infinity Raids alerts configured for role: {role_name} (every hour)")
     try:
         synced = await bot.tree.sync()
         print(f"✅ Synced {len(synced)} command(s)")
